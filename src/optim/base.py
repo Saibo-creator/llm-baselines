@@ -12,6 +12,9 @@ import os
 import numpy as np
 from .utils import eval, get_batch, save_checkpoint
 
+from accelerate import Accelerator
+import code
+
 
 def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
     device_type = 'cuda' if 'cuda' in str(extra_args.device) else 'cpu'
@@ -44,7 +47,8 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         train_sampler.set_epoch(train_epochs)
     else:
         sampler_state_before_iter = train_sampler.generator.get_state()
-    data_train_iter = iter(data["train"])
+    # data_train_iter = iter(data["train"])
+    train_dataloader = data["train"]
 
     
     # for val data we don't care about epochs? just cycle through (no need to set_epoch to reshuffle)
@@ -57,6 +61,11 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
     if extra_args.compile:
         print(f"Compiling model ...")
         model = torch.compile(model) # requires pytorch 2.0+
+
+
+    accelerator = Accelerator(mixed_precision='fp16')
+    # model, opt, dataloader = accelerator.prepare(model, opt, data_train_iter)
+    dataloader, model, opt, scheduler = accelerator.prepare(train_dataloader, model, opt, scheduler)
 
     model.train()
 
@@ -71,28 +80,38 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         get_batch(data_train_iter, device=extra_args.device)
 
     
-    while itr < iterations:
-            
-        for microstep_idx in range(acc_steps):  # gradient accumulation
-            x, y = get_batch(data_train_iter, device=extra_args.device)
-            
-            with type_ctx:
-                with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
-                    outputs = model(x, targets=y)
+    # while itr < iterations:
+        # for microstep_idx in range(acc_steps):  # gradient accumulation
+        #     x, y = get_batch(data_train_iter, device=extra_args.device)
+            # with type_ctx:
+            #     with distributed_backend.get_context_for_microstep_forward(model=model, microstep_idx=microstep_idx, gradient_accumulation_steps=acc_steps):
+            #         outputs = model(x, targets=y)
+        
+    for i, (x, y) in enumerate(train_dataloader):
+        if "cuda" in torch.device(extra_args.device).type:
+            # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
+            x = x.pin_memory().to(extra_args.device, non_blocking=True)
+            y = y.pin_memory().to(extra_args.device, non_blocking=True)
+        else:
+            x = x.to(extra_args.device)
+            y = y.to(extra_args.device)
 
-            loss = outputs['loss'] / acc_steps
-            loss.backward()
-            substep += 1
-            if substep % len(data["train"]) == 0:
-                train_epochs += 1
-                print(f"Train epoch {train_epochs} done (full pass over training data)")
-                if hasattr(train_sampler, "set_epoch"):
-                    # set epoch for reshuffling between epochs
-                    train_sampler.set_epoch(train_epochs)
-                    sampler_state_before_iter = None
-                else:
-                    sampler_state_before_iter = train_sampler.generator.get_state()
-                data_train_iter = iter(data["train"])
+        with accelerator.accumulate(model):
+            outputs = model(x, targets=y)
+
+        loss = outputs['loss'] / acc_steps
+        accelerator.backward(loss)
+        substep += 1
+        if substep % len(data["train"]) == 0:
+            train_epochs += 1
+            print(f"Train epoch {train_epochs} done (full pass over training data)")
+            if hasattr(train_sampler, "set_epoch"):
+                # set epoch for reshuffling between epochs
+                train_sampler.set_epoch(train_epochs)
+                sampler_state_before_iter = None
+            else:
+                sampler_state_before_iter = train_sampler.generator.get_state()
+            data_train_iter = iter(data["train"])
 
 
         if extra_args.grad_clip != 0.0:

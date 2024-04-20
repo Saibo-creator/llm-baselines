@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from models.base import CausalSelfAttention, GPTBase
+import bitsandbytes as bnb
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
@@ -160,7 +161,7 @@ class Llama(GPTBase):
 
         self.transformer = nn.ModuleDict(
             dict(
-                wte=nn.Embedding(config.vocab_size, config.n_embd),
+                wte=bnb.nn.StableEmbedding(config.vocab_size, config.n_embd),
                 drop=nn.Dropout(config.dropout),
                 h=nn.ModuleList([LlamaBlock(config) for _ in range(config.n_layer)]),
                 ln_f=RMSNorm(config.n_embd, eps=config.rmsnorm_eps),

@@ -15,6 +15,8 @@ from data.utils import get_dataset
 from optim.base import train_base
 from schedulefree import AdamWScheduleFree 
 import distributed
+import bitsandbytes as bnb
+
 
 
 def get_args():
@@ -76,6 +78,14 @@ def main(args):
         extra_args = dict(fused=True) if use_fused else dict()
         opt = torch.optim.AdamW(group_specs, lr=args.lr, betas=(args.beta1, args.beta2),
                                 weight_decay=args.weight_decay, **extra_args)
+    elif args.opt == 'Adam8bit':
+        use_fused = (device_type == 'cuda') and ('fused' in inspect.signature(torch.optim.AdamW).parameters)
+        print(f"using 8bit AdamW")
+        # extra_args = dict(fused=True) if use_fused else dict()
+        opt = bnb.optim.Adam8bit(model.parameters(), lr=args.lr, min_8bit_size=8, betas=(args.beta1, args.beta2),
+                                weight_decay=args.weight_decay)
+        # opt = torch.optim.AdamW(group_specs, lr=args.lr, betas=(args.beta1, args.beta2),
+        #                         weight_decay=args.weight_decay, **extra_args)
     else:
         opt = torch.optim.SGD(group_specs, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
     
@@ -145,6 +155,7 @@ def main(args):
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")
 
     print(f"\nTraining model={args.model} \n{vars(args)}\n")
+
 
     stats = train(model, opt, data, args.data_seed, scheduler, args.iterations, args.acc_steps, args.batch_size, args.sequence_length, 
                   eval_freq=args.eval_freq, 
