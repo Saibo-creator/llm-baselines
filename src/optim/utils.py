@@ -6,13 +6,13 @@ from contextlib import nullcontext, contextmanager, ExitStack
 
 def get_batch(dataloader, device="cpu"):
     x, y = next(dataloader)
-    if "cuda" in torch.device(device).type:
-        # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-        x = x.pin_memory().to(device, non_blocking=True)
-        y = y.pin_memory().to(device, non_blocking=True)
-    else:
-        x = x.to(device)
-        y = y.to(device)
+    # if "cuda" in torch.device(device).type:
+    #     # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
+    #     x = x.pin_memory().to(device, non_blocking=True)
+    #     y = y.pin_memory().to(device, non_blocking=True)
+    # else:
+    #     x = x.to(device)
+    #     y = y.to(device)
     return x, y
 
 

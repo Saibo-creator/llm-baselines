@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Dict
 import torch
+import code
 
 from .shakespeare import get_shakespeare_data
 from .wikitext import get_wikitext_data
@@ -35,9 +36,11 @@ def get_dataset(args) -> Dict[str, np.ndarray]:
         raise NotImplementedError(f"Unknow dataset key '{args.dataset}'")
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, data, sequence_length):
+    def __init__(self, data, sequence_length, device):
         super().__init__()
-        self.data = data
+        
+        loaded_data_numpy = np.array(data[:len(data)//2], dtype=np.uint8)
+        self.data = torch.tensor(loaded_data_numpy, dtype=torch.int, device=device)
         self.sequence_length = sequence_length
 
     def __len__(self):
@@ -49,15 +52,13 @@ class Dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         seq_length = self.sequence_length
         idx = idx * seq_length
-        x = torch.from_numpy((self.data[idx : idx + seq_length]).astype(np.int64))
+        x = self.data[idx : idx + seq_length]
+        y = self.data[idx + 1 : idx + 1 + seq_length]
 
-        y = torch.from_numpy(
-            (self.data[idx + 1 : idx + 1 + seq_length]).astype(np.int64)
-        )
         return x, y
 
 
-def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backend=None):
+def get_dataloader(data, sequence_length, batch_size, device='cpu', seed=0, distributed_backend=None):
     """Create a DataLoader for the given data. If distributed_backend is provided and is truly
     distributed (world size > 1), the DataLoader will be created with a DistributedSampler that
     splits the data across the processes (in conjunction with DDP).
@@ -65,7 +66,7 @@ def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backen
 
     Returns both the dataloader and the sampler.
     """
-    dataset = Dataset(data, sequence_length=sequence_length)
+    dataset = Dataset(data, sequence_length=sequence_length, device=device)
     if distributed_backend and distributed_backend.get_world_size() > 1:
         sampler = torch.utils.data.DistributedSampler(
             dataset,
@@ -83,6 +84,5 @@ def get_dataloader(data, sequence_length, batch_size, seed=0, distributed_backen
         dataset,
         sampler=sampler,
         batch_size=batch_size,
-        num_workers=4,
     )
     return loader, sampler

@@ -11,6 +11,7 @@ import random
 import os
 import numpy as np
 from .utils import eval, get_batch, save_checkpoint
+import code
 
 
 def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, batch_size, sequence_length, eval_freq, ckpt_path, distributed_backend,extra_args, itr=0,rng_state_dict=None):
@@ -23,6 +24,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         data["train"],
         sequence_length=sequence_length,
         batch_size=batch_size,
+        device=str(extra_args.device),
         seed=data_seed,
         distributed_backend=distributed_backend,
     )
@@ -31,6 +33,7 @@ def train_base(model, opt, data, data_seed, scheduler, iterations, acc_steps, ba
         data["val"],
         sequence_length=sequence_length,
         batch_size=batch_size,
+        device=str(extra_args.device),
         seed=data_seed,
     )
 
