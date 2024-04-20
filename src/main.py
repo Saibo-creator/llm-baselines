@@ -27,7 +27,6 @@ def get_args():
 
 
 def main(args): 
-
     torch.backends.cuda.matmul.allow_tf32 = True # allows us to make sure we're able to use tensorfloat32 during training
     torch.backends.cudnn.allow_tf32 = True
 
@@ -139,7 +138,7 @@ def main(args):
             scheduler_state_dict = checkpoint['scheduler']
             scheduler.load_state_dict(scheduler_state_dict)
 
-    if args.model in ['base', 'llama2']: # all train functions have the same interface
+    if args.model in ['base', 'llama2', 'brainformer']: # all train functions have the same interface
         train = train_base
     else:
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")

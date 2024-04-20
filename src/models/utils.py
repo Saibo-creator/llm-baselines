@@ -1,6 +1,7 @@
 import torch
 from .llama import Llama, RMSNorm
 from .base import GPTBase, LayerNorm
+from .brainformer import BrainFormer
 
 
 BLACKLIST_WEIGHT_MODULES = (
@@ -18,6 +19,9 @@ def get_model(args):
         return model
     elif args.model == 'llama2':
         model = Llama(args)
+        return model
+    elif args.model == 'brainformer':
+        model = BrainFormer(args)
         return model
     else:
         raise KeyError(f"Unknown model '{args.model}'.")
