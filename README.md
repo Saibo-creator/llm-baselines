@@ -5,7 +5,7 @@
 
 | Model                     | Perplexity | Accuracy (%)   | Comments                       |
 |---------------------------|------------|----------------|--------------------------------|
-| **Our Best model (166M)** | **24.8**   | **42.8**       | Achieved at 153min(23.2Kiters) |
+| **Our Best model (166M)** | **24.2**   | **43.3**       | Achieved at 173min(26.2K iters) |
 | GPT-baseline (208M)       | 26.4       | 41.7           | Given by the organizers        |
 | llama-baseline (208M)     | 27.1       | 41.2           | Given by the organizers        |
 
@@ -27,7 +27,7 @@ The above command trains a 166M parameters model with the following parameters:
 
 It trains for 23.2k iterations with a batch size of 66 (No gradient accumulation steps), using default hyperparameters with dropout **enabled**. 
 The model is trained on the `slimpajama` dataset. 
-The training takes roughly 2.5 hours on a single A100 GPU.
+The training takes roughly 3 hours on a single A100 GPU.
 
 You can check out the wandb run for yourself [here](https://api.wandb.ai/links/lauzhack-llm/1s5gkhkm).
 You find the [model checkpoint](https://drive.google.com/file/d/1Byj1gQRN-Lf2XqFmvCQMiNA_4aTjmDkO/view?usp=sharing) and the [model config](assets/best_run_summary_config.json). 
