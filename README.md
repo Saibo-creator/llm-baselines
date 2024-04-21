@@ -1,136 +1,121 @@
-# LLM-baselines
+# Mini LLM Challenge(Team-13)
 
-A modular codebase to experiment with transformers, inspired by NanoGPT. 
 
-## Quickstart 
+## Result
+
+| Model                     | Perplexity | Accuracy (%)   | Comments                       |
+|---------------------------|------------|----------------|--------------------------------|
+| **Our Best model (166M)** | **24.8**   | **42.8**       | Achieved at 153min(23.2Kiters) |
+| GPT-baseline (208M)       | 26.4       | 41.7           | Given by the organizers        |
+| llama-baseline (208M)     | 27.1       | 41.2           | Given by the organizers        |
+
+
+
+## Reproduce 
 
 Install dependencies: 
 
 ```
 pip install -r requirements.txt
+python scripts/best_run.sh
 ```
 
-Run a simple training on the Slimpajama dataset ([6B subset](https://huggingface.co/datasets/DKYoon/SlimPajama-6B), 24GBs decompressed, takes a few minutes to download):
+The above command trains a 166M parameters model with the following parameters:
+- n_layer **18**
+- n_embd 768 
+- n_head 12
 
-```sh
-python ./src/main.py --config_format base
-```
+It trains for 23.2k iterations with a batch size of 66 (No gradient accumulation steps), using default hyperparameters with dropout **enabled**. 
+The model is trained on the `slimpajama` dataset. 
+The training takes roughly 2.5 hours on a single A100 GPU.
 
-The above command trains a 123.59M parameters model. It trains for 25k iterations with a batch size of 128=32x4 (4 gradient accumulation steps), using a cosine schedule with a maximum learning rate of 1e-3 that is reduced to 1e-4 at the end of training. The model is saved in the `./exps` folder.
+You can check out the wandb run for yourself [here](https://api.wandb.ai/links/lauzhack-llm/1s5gkhkm).
+You find the [model checkpoint](https://drive.google.com/file/d/1Byj1gQRN-Lf2XqFmvCQMiNA_4aTjmDkO/view?usp=sharing)
 
-This training takes roughly ~3h on a single A100 (80GB) GPU. The plot of the training and validation loss should look roughly like this:
+## Our Approach
 
-<img src="./assets/loss_slimpajama.png" alt="Loss on SlimPajama" width="500"/>
-<img src="./assets/pplx_slimpajama.png" alt="Perplexity on SlimPajama" width="500"/>
+We worked on 3 directions to improve the training efficiency given the allocated 3 hours of training: hyperparameter search and model scaling, model architecture, and data selection. 
 
-You can check out the wandb run for yourself [here](https://wandb.ai/haeggee/llm-lauzhack/runs/lm2obqy9?nw=nwuserhaeggee).
+We tried various tricks but most of them didn't result in a significant improvement in the final performance.
+Some of them looked promising at the beginning but didn't converge to a better model in the end.
 
+The tricks that helped us to improve the performance are:
+- Enable dropout
+- Using scaling law to find the optimal model size
+- Using a smaller batch size for more iterations
 
-## Less quick start
+### Scaling Law with fixed compute
 
-Here are the possible parameters you can use (copypasted from `config/base.py`):
+The setting of the challenge is to train a model with a fixed 3h compute budget.
+The FLOPS of A100 GPU is 3.12 * 10^14 flops/s, so the total FLOPS is 3.12 * 10^14 * 3 * 3600 ~ 3.4 * 10^18 flops.
 
-```python
-# General training params
-parser.add_argument('--batch_size', default=32, type=int)
-parser.add_argument('--acc_steps', default=4, type=int)
-parser.add_argument('--seed', default=0, type=int) # random seed for the parameters
-parser.add_argument('--data_seed', default=1337, type=int) # random seed defining the data ordering
-parser.add_argument('--device', default='cuda:0', type=str) # see below to run on multiple GPUs
-parser.add_argument('--iterations', default=25000, type=int) # total number of training iterations
-parser.add_argument('--lr', default=1e-3, type=float) 
-parser.add_argument('--warmup_percent', default=0.05, type=float) # the total number of warmup steps is iterations * warmup_percent
-parser.add_argument('--weight_decay', default=0.1, type=float) # I recommend you keep this value, else instabilities might arise
-parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
-parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
-parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'none'])
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd'])
-parser.add_argument('--eval_freq', default=200, type=int) # in iterations
-parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
-parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
-# Dataset params
-parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', "shakespeare-char", 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
-parser.add_argument('--vocab_size', default=50304, type=int)
-parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, you most likely do not need this  
-# Model params
-parser.add_argument('--model', default='base', choices=['base', 'llama2'])
-parser.add_argument('--use_pretrained', default="none", type=str) # 'none', 'gpt-2' or a path to the pretraind model
-parser.add_argument('--dropout', default=0.0, type=float) # keep to 0 unless in low data regime (e.g. wikitext)
-parser.add_argument('--n_head', default=12, type=int)
-parser.add_argument('--n_layer', default=12, type=int) # depth in (att + ff) blocks
-parser.add_argument('--n_embd', default=768, type=int) # hidden size ... 
-parser.add_argument('--sequence_length', default=512, type=int)
-parser.add_argument('--dtype', default=torch.bfloat16, type=torch.dtype)
-parser.add_argument('--bias', default=False, type=bool)
-parser.add_argument('--compile', action='store_true') # if true then model is compiled 
-parser.add_argument('--rmsnorm_eps', default=1e-5, type=float) # used by the llama model
-parser.add_argument('--multiple_of', default=256, type=int) # used by the llama model make SwiGLU hidden layer size multiple of large power of 2
-# logging params (WandB)
-parser.add_argument('--wandb', action='store_true') # whether to use wandb or not
-parser.add_argument('--wandb_project', default="my-project", type=str)
-parser.add_argument('--wandb_run_prefix', default="none", type=str) # is added before the autogenerated experiment name
-parser.add_argument('--eval_seq_prefix', default="Once upon a time", type=str) # prefix used to generate sequences
-# Distributed args
-parser.add_argument('--distributed_backend', default=None, type=str, required=False,
-                    choices=distributed.registered_backends())  # distributed backend type (e.g. nccl)
-parser.add_argument('--save_checkpoint_freq', default=None, type=int, required=False)
-```
+However, we may not be able to fully utilize the FLOPS
 
-## Using WandB
+We interpolate the [scaling law from Deep Mind](https://arxiv.org/pdf/2203.15556.pdf) and the optimal config would be:
+- 170M parameters
+- 3.4B tokens
 
-You need to give your wandb authorize key in order to send the data to your wandb account. If you start jobs on a server without access to prompt, then you can set the `WANDB_API_KEY` variable within your script:
+Considering we may not fully utilize the FLOPS, the optimal model size may be a bit smaller.
 
-```bash
-# this is a script that could be executed on a server
-pip install -r requirements.txt # install req.
-export WANDB_API_KEY="put your authorize key here, to find it: https://wandb.ai/authorize"
-python ./src/main.py --config_format base --wandb --wandb_project "my awesome project" --n_layer 7 --model base --seed 123
-```
+However, as the scaling law is generally for LLM with parameters > 1B, we decide to validate it empirically by training model with different sizes.
 
-## How to add your own transformer architecture? 
+The plots are [here](https://api.wandb.ai/links/lauzhack-llm/df512dsi)
 
-The structure of the project is the following: 
+Takeaways:
+- The smaller the model, the faster it converges but the final performance is not guaranteed to be better.
+- 12Layer and 18Layer models have similar performance, but 24Layer model(given by the organizers) has a 2 ppl gap.
+- Model smaller than 8 Layer has significantly worse performance.
+  
+### Larger batch size
 
-```sh
-src/
-    main.py         # pick the right data, model, and training function
-    config/
-        __init__.py # contains CONFIG_FORMAT_TO_MODULE_MAP mapping the name given to the --config_format flag with a python conf file
-        base.py     # config for the base model
-    data/
-        utils.py    # contains the get_dataset function
-        wikitext.py # load/process wikitext
-        arxiv.py    # load/process arxiv
-        shakespeare.py # load/process the Shakespeare dataset
-        slimpajama.py
-        ...
-    models/
-        utils.py    # contains the get_model function
-        base.py     # contains the standard transformer base architecture
-        llama.py    # llama architecture
-    optim/
-        utils.py    # contains eval and get_batch functions
-        base.py     # training function for the base and llama models
-    distributed/
-        # code to enable simple distributed training
-```
+There is a trade-off between batch size and the number of iterations.
 
-Given the above structure, to add your own model, you can just fork the `./src/models/base.py` file, do your modifications, then if necessary fork the `./src/optim/base.py` in case you need some custom training loop or evaluation. You also need to fork the `./src/config/base.py` file to add your own parameters, which imply adding your new config to the mapping `CONFIG_FORMAT_TO_MODULE_MAP` in `./src/config/__init__.py`. To add a new dataset, create a new file in the `data` folder, check `wikitext.py` for the expected format. 
+Traditionally, people use large batch size to train LLM such as 256 or 512. 
+However, in our settings, smaller batch size is better as it allows more iterations.
 
-## Multi-GPU training
+This is why we removed **gradient accumulation** and used a batch size of 66.
 
-Given a multi-GPU machine with e.g. 4 GPUs, one can distribute the training using data-parallelism:
+### Dropout
 
-```sh
-torchrun --nproc_per_node=4 ./src/main.py --config_format base --distributed_backend nccl --dataset slimpajama --model base
-```
+Previous work has shown that dropout is not necessary for LLM training.
+However, we found that dropout is beneficial in our setting, boosting the performance by 1.5 ppl.
 
-When using multiple GPUs, the data will be distributed among the GPUs by dividing the number of accumulation steps by the number of nodes. For instance if we train with a batch size of 32 and 4 accumulation steps, then each GPU will process batches of 32 elements and do 1 accumulation steps. For this reason we require `acc_steps` to be a multiple of the number of GPUs.    
+Takeaways:
+- Dropout is beneficial in our setting.
+
+### Model architecture
+
+After finding the optimal model size, we want to know if using model with **wider layers** would help.
+Given the`N = 12*D^2*L`, we increase the width of the model and reduce the depth to keep the number of parameters the same.
+
+The plots are [here](https://wandb.ai/lauzhack-llm/width_depth_3h/reports/width-VS-depth--Vmlldzo3NjM1NTkz)
+
+Takeaways:
+- Wider models converge faster but the final performance is slightly worse than the deeper models.
+
+### Large Learning Rate
+
+As we have limited time, we want to know if using a large learning rate would accelerate the training process.
+
+We did not investigate this further as the default learning rate is already large, i.e. 0.001
+
+### Brainformer architecture: 
+The [brainformer block](https://arxiv.org/pdf/2306.00008.pdf) is composed of self-attention + MoE layer + MLP layer + MoE layer + MLP layer + MoE layer or little variations depending on the brainformer version - Brainformer paper
+
+### Architecture modification from BabyLM challenge winners:
+We applied BabyLM challenge winners architecture modification on LlaMA 2 architecture: allowing all layers within the architecture to have a weighted residual connection to all previous layers 
+[Not all layers are equally as important](https://arxiv.org/pdf/2311.02265.pdf)
+
+### LR scheduling:
+
+- Composing lr-schedulers (e.g. warm restarts with cosine schedule on plateau)
+- Schedule-free optimizers (https://github.com/facebookresearch/schedule_free)
+
+### Data selection:
+Data selection using (papers considered Dataset Cartography, SemDeDup, RETSIM) all approaches required steps that turned out to be too expensive for us within this 2 days timeframe
 
 
-## Experimenting locally on your device with CPU
-If do not have access to a GPU or just want to try the code locally on your device, you can try the Shakespeare dataset with character-level tokens:
 
-```sh
-python ./src/main.py --n_layer=2 --n_head=4 --n_embd=128 --sequence_length=256 --dataset=shakespeare-char --device=cpu --vocab_size=96
-```
+### Other directions we considered:
+- MLP-Mixer inspired models like HyperMixer (HyperMixer paper) but required generalization to the autoregressive setting (which with our naive extension would require the same computational complexity as the transformer's self-attention).
+- 8-bit optimizers (https://huggingface.co/docs/bitsandbytes/main/en/optimizers)
