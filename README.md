@@ -30,7 +30,7 @@ The model is trained on the `slimpajama` dataset.
 The training takes roughly 2.5 hours on a single A100 GPU.
 
 You can check out the wandb run for yourself [here](https://api.wandb.ai/links/lauzhack-llm/1s5gkhkm).
-You find the [model checkpoint](https://drive.google.com/file/d/1Byj1gQRN-Lf2XqFmvCQMiNA_4aTjmDkO/view?usp=sharing)
+You find the [model checkpoint](https://drive.google.com/file/d/1Byj1gQRN-Lf2XqFmvCQMiNA_4aTjmDkO/view?usp=sharing) and the [model config](assets/best_run_summary_config.json). 
 
 ## Our Approach
 
