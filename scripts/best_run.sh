@@ -1,0 +1,1 @@
+python ./src/main.py --config_format base --wandb --wandb_project scaling_law_3h --grad_clip 1.0 --model llama2 --seed 123 --dataset slimpajama --n_layer 18 --batch_size 66 --dropout 0.05 --acc_steps 1 --iterations 23200 --eval_freq 2000
