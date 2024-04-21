@@ -29,7 +29,7 @@ It trains for 23.2k iterations with a batch size of 66 (No gradient accumulation
 The model is trained on the `slimpajama` dataset. 
 The training takes roughly 3 hours on a single A100 GPU.
 
-You can check out the wandb run for yourself [here](https://api.wandb.ai/links/lauzhack-llm/1s5gkhkm).
+You can check out the wandb run for yourself [here](https://api.wandb.ai/links/lauzhack-llm/udvei49j).
 You find the [model checkpoint](https://drive.google.com/file/d/1Byj1gQRN-Lf2XqFmvCQMiNA_4aTjmDkO/view?usp=sharing) and the [model config](assets/best_run_summary_config.json). 
 
 ## Our Approach
